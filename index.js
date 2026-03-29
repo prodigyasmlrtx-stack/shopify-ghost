@@ -1,51 +1,89 @@
 const express = require('express');
+
 const axios = require('axios');
-const { HttpsProxyAgent } = require('https-proxy-agent'); 
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-// TUS DATOS DE WEBSHARE (LONDRES)
-const proxyUrl = "http://arzktwer:f552fuaoo921@31.59.20.176:6754";
-const agent = new HttpsProxyAgent(proxyUrl);
+const PORT = process.env.PORT || 10000;
+
+
+
+// COPIA TU API KEY DE ZENROWS AQUÍ ABAJO
+
+const ZENROWS_API_KEY = "fa099b8db85ef98afcfacdf7f44a3a9db17354a9"; 
+
+
 
 app.get('/api/spy', async (req, res) => {
+
     const { shop } = req.query;
-    if (!shop) return res.status(400).json({ error: "Falta el nombre de la tienda" });
+
+    if (!shop) return res.status(400).json({ error: "Falta la URL de la tienda" });
+
+
 
     try {
-        const target = `https://${shop.replace('https://', '')}/products.json?limit=250`;
-        
-        const response = await axios.get(target, {
-            httpsAgent: agent, // AQUÍ USA EL PROXY DE LONDRES
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'application/json'
-            },
-            timeout: 15000 
-        });
 
-        const dataLimpia = response.data.products.map(p => ({
+        // Configuramos la URL de la tienda
+
+        const targetUrl = `https://${shop}/products.json?limit=250`;
+
+        
+
+        // Llamamos a ZenRows (ellos usan sus proxies premium por nosotros)
+
+        const zenRowsUrl = `https://api.zenrows.com/v1/?apikey=${ZENROWS_API_KEY}&url=${encodeURIComponent(targetUrl)}&premium_proxy=true`;
+
+
+
+        const response = await axios.get(zenRowsUrl);
+
+
+
+        // Si ZenRows nos devuelve los datos, los limpiamos para el cliente
+
+        const dataParaVender = response.data.products.map(p => ({
+
             titulo: p.title,
+
             precio: p.variants[0]?.price,
+
             sku: p.variants[0]?.sku,
+
             imagen: p.images[0]?.src,
-            disponible: p.variants[0]?.available ? "SÍ" : "NO"
+
+            creado: p.created_at
+
         }));
 
+
+
         res.json({
+
             status: "success",
-            tienda: shop,
-            total: dataLimpia.length,
-            productos: dataLimpia
+
+            total: dataParaVender.length,
+
+            productos: dataParaVender
+
         });
 
-    } catch (e) {
+
+
+    } catch (error) {
+
         res.status(500).json({ 
-            error: "Shopify sigue bloqueando o el Proxy falló", 
-            detalle: e.message 
+
+            error: "Error de blindaje", 
+
+            message: "ZenRows no pudo entrar o la tienda no es Shopify" 
+
         });
+
     }
+
 });
 
-app.listen(PORT, () => console.log(`Motor blindado en puerto ${PORT}`));
+
+
+app.listen(PORT, () => console.log("Motor blindado activo en Render"));
