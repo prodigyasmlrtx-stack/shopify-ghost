@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 10000;
 
 
 
-// COPIA TU API KEY DE ZENROWS AQUÍ ABAJO
+// TU API KEY DE ZENROWS
 
 const ZENROWS_API_KEY = "fa099b8db85ef98afcfacdf7f44a3a9db17354a9"; 
 
@@ -18,21 +18,31 @@ app.get('/api/spy', async (req, res) => {
 
     const { shop } = req.query;
 
-    if (!shop) return res.status(400).json({ error: "Falta la URL de la tienda" });
+    if (!shop) return res.status(400).json({ error: "Falta la tienda" });
 
 
 
     try {
 
-        // Configuramos la URL de la tienda
+        // Limpiamos la URL por si acaso
 
-        const targetUrl = `https://${shop}/products.json?limit=250`;
+        const cleanShop = shop.replace('https://', '').replace('http://', '').split('/')[0];
+
+        const targetUrl = `https://${cleanShop}/products.json?limit=250`;
 
         
 
-        // Llamamos a ZenRows (ellos usan sus proxies premium por nosotros)
+        // ESTA ES LA LLAVE MAESTRA:
 
-        const zenRowsUrl = `https://api.zenrows.com/v1/?apikey=${ZENROWS_API_KEY}&url=${encodeURIComponent(targetUrl)}&premium_proxy=true`;
+        // premium_proxy=true (IPs de casas reales)
+
+        // js_render=true (Simula un navegador de verdad, esto evita el 99% de bloqueos)
+
+        const zenRowsUrl = `https://api.zenrows.com/v1/?apikey=${ZENROWS_API_KEY}&url=${encodeURIComponent(targetUrl)}&premium_proxy=true&js_render=true`;
+
+
+
+        console.log(`Espiando a: ${cleanShop}...`);
 
 
 
@@ -40,19 +50,27 @@ app.get('/api/spy', async (req, res) => {
 
 
 
-        // Si ZenRows nos devuelve los datos, los limpiamos para el cliente
+        // Validamos si Shopify respondió con productos
 
-        const dataParaVender = response.data.products.map(p => ({
+        if (!response.data || !response.data.products) {
+
+            return res.status(404).json({ error: "No se encontraron productos o la tienda no es Shopify" });
+
+        }
+
+
+
+        const productos = response.data.products.map(p => ({
 
             titulo: p.title,
 
-            precio: p.variants[0]?.price,
+            precio: p.variants[0]?.price || "N/A",
 
-            sku: p.variants[0]?.sku,
+            sku: p.variants[0]?.sku || "N/A",
 
-            imagen: p.images[0]?.src,
+            imagen: p.images[0]?.src || "",
 
-            creado: p.created_at
+            fecha: p.created_at
 
         }));
 
@@ -62,21 +80,25 @@ app.get('/api/spy', async (req, res) => {
 
             status: "success",
 
-            total: dataParaVender.length,
+            tienda: cleanShop,
 
-            productos: dataParaVender
+            total: productos.length,
+
+            data: productos
 
         });
 
 
 
-    } catch (error) {
+    } catch (e) {
+
+        // Esto te dirá exactamente qué falló
 
         res.status(500).json({ 
 
-            error: "Error de blindaje", 
+            error: "Fallo de conexión", 
 
-            message: "ZenRows no pudo entrar o la tienda no es Shopify" 
+            mensaje: e.response?.data?.message || e.message 
 
         });
 
@@ -86,4 +108,4 @@ app.get('/api/spy', async (req, res) => {
 
 
 
-app.listen(PORT, () => console.log("Motor blindado activo en Render"));
+app.listen(PORT, () => console.log(`Tanque activo en puerto ${PORT}`));
